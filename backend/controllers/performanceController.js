@@ -1,57 +1,53 @@
-const Performance = require("../models/Performance");
-const Employee = require("../models/Employee"); // <-- THE MISSING IMPORT
 const asyncHandler = require("express-async-handler");
+const mongoose = require("mongoose");
+const Performance = require("../models/Performance");
+const Employee = require("../models/Employee");
+const { requireOwnProfile } = require("../utils/ownProfile");
 
-// @desc    Get all performance reviews
-// @route   GET /api/performance
-// @access  Private/Admin, Private/HR
+const populate = (q) =>
+  q.populate("employee", "firstName lastName jobTitle department employeeId").populate("reviewer", "name role");
+
+// @route GET /api/performance  (admin, hr, manager)
 exports.getAllPerformanceReviews = asyncHandler(async (req, res) => {
-  const reviews = await Performance.find({}).populate(
-    "employee",
-    "firstName lastName jobTitle"
-  );
-  res.status(200).json(reviews);
+  const reviews = await populate(Performance.find({}).sort({ reviewDate: -1 }));
+  res.json(reviews.filter((r) => r.employee));
 });
 
-// @desc    Create a new performance review
-// @route   POST /api/performance
-// @access  Private/Admin, Private/HR
+// @route POST /api/performance  (admin, hr, manager)
 exports.createPerformanceReview = asyncHandler(async (req, res) => {
-  const { employee, rating, comments, reviewDate } = req.body;
+  const { employee, comments, reviewDate } = req.body;
+  const rating = Number(req.body.rating);
 
-  if (!employee || !rating || !reviewDate) {
+  if (!employee || !rating || !comments?.trim()) {
     res.status(400);
-    throw new Error("Please provide employee, rating, and review date");
+    throw new Error("Employee, rating and comments are required");
+  }
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+    res.status(400);
+    throw new Error("Rating must be a whole number from 1 to 5");
+  }
+  const target = mongoose.isValidObjectId(employee) && (await Employee.findById(employee));
+  if (!target) {
+    res.status(400);
+    throw new Error("Employee not found");
+  }
+  if (String(target.user) === String(req.user._id)) {
+    res.status(400);
+    throw new Error("You can't review yourself");
   }
 
   const review = await Performance.create({
     employee,
     rating,
-    comments,
-    reviewDate,
+    comments: comments.trim(),
+    reviewDate: reviewDate || new Date(),
     reviewer: req.user._id,
   });
-
-  // Populate the new review before sending it back
-  const populatedReview = await Performance.findById(review._id).populate(
-    "employee",
-    "firstName lastName jobTitle"
-  );
-
-  res.status(201).json(populatedReview);
+  res.status(201).json(await populate(Performance.findById(review._id)));
 });
 
-// --- NEW FUNCTION (FIXED) ---
-// @desc    Get all performance reviews for the logged-in user
-// @route   GET /api/performance/my-reviews
-// @access  Private (any logged-in user)
+// @route GET /api/performance/my-reviews  (any signed-in user with a profile)
 exports.getMyPerformanceReviews = asyncHandler(async (req, res) => {
-  const employeeProfile = await Employee.findOne({ user: req.user._id });
-  if (!employeeProfile) {
-    res.status(404);
-    throw new Error("Employee profile not found");
-  }
-
-  const reviews = await Performance.find({ employee: employeeProfile._id });
-  res.status(200).json(reviews);
+  const me = await requireOwnProfile(req, res);
+  res.json(await Performance.find({ employee: me._id }).sort({ reviewDate: -1 }).populate("reviewer", "name role"));
 });

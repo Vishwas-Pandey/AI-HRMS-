@@ -1,21 +1,33 @@
 const notFound = (req, res, next) => {
-  // Catch 404 errors for non-existent routes
-  const error = new Error(`Not Found - ${req.originalUrl}`);
   res.status(404);
-  next(error);
+  next(new Error(`Not found - ${req.originalUrl}`));
 };
 
-// General error handler middleware
 const errorHandler = (err, req, res, next) => {
-  // Set the status code. If a status code was set (e.g., 400), use it.
-  // Otherwise, default to 500 (Server Error).
-  const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
-  res.status(statusCode);
+  let status = res.statusCode >= 400 ? res.statusCode : 500;
+  let message = err.message;
 
-  // Send a JSON response with the error message and stack trace (in dev mode)
-  res.json({
-    message: err.message,
-    stack: process.env.NODE_ENV === "production" ? null : err.stack,
+  // Turn Mongoose/Mongo errors into readable 400s instead of 500s.
+  if (err.name === "ValidationError") {
+    status = 400;
+    message = Object.values(err.errors).map((e) => e.message).join(", ");
+  } else if (err.name === "CastError") {
+    status = 400;
+    message = `Invalid ${err.path}`;
+  } else if (err.code === 11000) {
+    status = 400;
+    message = `Duplicate value for ${Object.keys(err.keyValue || {}).join(", ") || "a unique field"}`;
+  } else if (err.type === "entity.parse.failed") {
+    status = 400;
+    message = "Malformed JSON body";
+  } else if (err.code === "LIMIT_FILE_SIZE") {
+    status = 400;
+    message = "File is too large (max 5 MB)";
+  }
+
+  if (status >= 500) console.error(err);
+  res.status(status).json({
+    message: status >= 500 && process.env.NODE_ENV === "production" ? "Something went wrong" : message,
   });
 };
 

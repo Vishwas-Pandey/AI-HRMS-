@@ -1,218 +1,279 @@
-import React, { useState, useEffect } from "react";
-import { useUser } from "../context/UserContext";
-import axiosInstance from "../api/axiosInstance";
+import { useMemo, useState } from "react";
+import { CalendarCheck, ChevronLeft, ChevronRight, CircleDashed, Plane, Search, UserCheck, UserX } from "lucide-react";
+import {
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  ConfirmDialog,
+  EmptyState,
+  ErrorState,
+  Input,
+  PageHeader,
+  Select,
+  StatCard,
+  StatusBadge,
+  TableSkeleton,
+  useToast,
+} from "../components/ui";
+import { useAuth } from "../context/AuthContext";
+import api, { errorMessage } from "../lib/api";
+import { formatDate, formatTime, fullName, toDateInput } from "../lib/format";
+import { can } from "../lib/roles";
+import { useFetch } from "../lib/useFetch";
+import { StatusSegmented } from "./attendance/StatusSegmented";
 
-// --- 1. IMPORT THE NEW MODAL ---
-import MarkAttendanceModal from "../components/MarkAttendanceModal.jsx";
-
-// --- Icons ---
-const IconPlus = (props) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    {...props}
-  >
-    <line x1="12" y1="5" x2="12" y2="19" />
-    <line x1="5" y1="12" x2="19" y2="12" />
-  </svg>
-);
-// ... other icons
-// --- End Icons ---
+// Shift a YYYY-MM-DD string by n days without timezone drift.
+const shiftDay = (day, n) => {
+  const [y, m, d] = day.split("-").map(Number);
+  return toDateInput(new Date(y, m - 1, d + n));
+};
 
 const AttendancePage = () => {
-  const { user } = useUser();
-  const [records, setRecords] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { user } = useAuth();
+  const toast = useToast();
+  const canMark = can(user, "attendance.mark");
+  const today = toDateInput();
 
-  // --- 2. ADD STATE TO CONTROL THE MODAL ---
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [day, setDay] = useState(today);
+  const [query, setQuery] = useState("");
+  const [dept, setDept] = useState("");
+  const [saving, setSaving] = useState({});
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
-  // Helper to format date
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
+  const employees = useFetch("/employees");
+  const attendance = useFetch(`/attendance?date=${day}`);
+
+  const loading = employees.loading || attendance.loading;
+  const error = employees.error || attendance.error;
+  const retry = () => {
+    employees.reload();
+    attendance.reload();
+  };
+
+  // One row per employee, joined with that day's record (if any).
+  const rows = useMemo(() => {
+    const byEmp = new Map((attendance.data || []).map((r) => [String(r.employee?._id), r]));
+    return (employees.data || []).map((e) => ({ employee: e, record: byEmp.get(String(e._id)) || null }));
+  }, [employees.data, attendance.data]);
+
+  const counts = useMemo(() => {
+    const c = { Present: 0, Absent: 0, Leave: 0, unmarked: 0 };
+    rows.forEach((r) => (r.record ? (c[r.record.status] += 1) : (c.unmarked += 1)));
+    return c;
+  }, [rows]);
+
+  const departments = useMemo(
+    () => [...new Set((employees.data || []).map((e) => e.department).filter(Boolean))].sort(),
+    [employees.data]
+  );
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return rows.filter(({ employee: e }) => {
+      if (dept && e.department !== dept) return false;
+      if (!q) return true;
+      return [fullName(e), e.employeeId, e.jobTitle, e.email].some((v) => v?.toLowerCase().includes(q));
     });
-  };
+  }, [rows, query, dept]);
 
-  // Helper to format time
-  const formatTime = (dateString) => {
-    if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
+  const unmarked = rows.filter((r) => !r.record);
+
+  const upsertLocal = (record) =>
+    attendance.setData((list) => {
+      const rest = (list || []).filter((r) => String(r.employee?._id) !== String(record.employee?._id));
+      return [...rest, record];
     });
-  };
 
-  useEffect(() => {
-    const fetchAttendance = async () => {
-      try {
-        setIsLoading(true);
-        const response = await axiosInstance.get("/attendance");
-        setRecords(response.data);
-      } catch (err) {
-        setError(err.message || "Failed to fetch attendance records");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchAttendance();
-  }, []);
-
-  // --- 3. FUNCTION TO UPDATE LIST AFTER ADDING ---
-  const handleRecordAdded = (newRecord) => {
-    // This function re-fetches the data to get the populated employee info
-    const fetchUpdatedRecords = async () => {
-      const response = await axiosInstance.get("/attendance");
-      setRecords(response.data);
-    };
-    fetchUpdatedRecords();
-  };
-
-  const getStatusChip = (status) => {
-    switch (status) {
-      case "Present":
-        return (
-          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-            {status}
-          </span>
-        );
-      case "Absent":
-        return (
-          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
-            {status}
-          </span>
-        );
-      case "Leave":
-        return (
-          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
-            {status}
-          </span>
-        );
-      default:
-        return (
-          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
-            {status}
-          </span>
-        );
+  const mark = async (employee, status) => {
+    const id = employee._id;
+    const previous = rows.find((r) => r.employee._id === id)?.record || null;
+    // Optimistic: show the new status straight away, roll back on failure.
+    upsertLocal({ ...(previous || {}), _id: previous?._id || `tmp-${id}`, employee, status, checkIn: status === "Present" ? previous?.checkIn || new Date().toISOString() : null, checkOut: status === "Present" ? previous?.checkOut : null });
+    setSaving((s) => ({ ...s, [id]: true }));
+    try {
+      const res = await api.post("/attendance", { employee: id, date: day, status });
+      upsertLocal(res.data);
+      toast.success(`${fullName(employee)} marked ${status.toLowerCase()}`);
+    } catch (err) {
+      attendance.setData((list) => {
+        const rest = (list || []).filter((r) => String(r.employee?._id) !== String(id));
+        return previous ? [...rest, previous] : rest;
+      });
+      toast.error(errorMessage(err));
+    } finally {
+      setSaving((s) => ({ ...s, [id]: false }));
     }
   };
 
+  const markAllPresent = async () => {
+    setBulkBusy(true);
+    const results = await Promise.allSettled(
+      unmarked.map((r) => api.post("/attendance", { employee: r.employee._id, date: day, status: "Present" }))
+    );
+    const ok = results.filter((r) => r.status === "fulfilled");
+    ok.forEach((r) => upsertLocal(r.value.data));
+    const failed = results.length - ok.length;
+    setBulkBusy(false);
+    setBulkOpen(false);
+    if (failed) toast.error(`${failed} of ${results.length} couldn't be saved. Please try again.`);
+    else toast.success(`Marked ${ok.length} employee${ok.length === 1 ? "" : "s"} present`);
+  };
+
+  const isToday = day === today;
+
   return (
-    <>
-      {/* --- 4. RENDER THE MODAL --- */}
-      <MarkAttendanceModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onRecordAdded={handleRecordAdded}
+    <div>
+      <PageHeader
+        title="Attendance"
+        description={canMark ? "Track and mark daily attendance for the whole team." : "Daily attendance for the whole team (read-only)."}
+        actions={
+          canMark && (
+            <Button icon={UserCheck} onClick={() => setBulkOpen(true)} disabled={loading || !!error || unmarked.length === 0}>
+              Mark all unmarked as present
+            </Button>
+          )
+        }
       />
 
-      <div className="p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-800">Attendance</h1>
-
-          {/* --- 5. CONNECT THE BUTTON --- */}
-          {(user.role === "admin" || user.role === "hr") && (
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="flex items-center bg-indigo-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-indigo-700 transition-colors"
-            >
-              <IconPlus className="w-5 h-5 mr-2" />
-              Mark Attendance
-            </button>
-          )}
+      <Card className="mb-6 flex flex-wrap items-center gap-3 p-4">
+        <div className="flex items-center gap-1">
+          <Button variant="secondary" size="icon" aria-label="Previous day" onClick={() => setDay((d) => shiftDay(d, -1))}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <label htmlFor="att-date" className="sr-only">
+            Date
+          </label>
+          <Input id="att-date" type="date" value={day} max={today} onChange={(e) => e.target.value && setDay(e.target.value)} className="w-auto" />
+          <Button variant="secondary" size="icon" aria-label="Next day" disabled={day >= today} onClick={() => setDay((d) => shiftDay(d, 1))}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
         </div>
+        <p className="text-sm text-slate-600">
+          {formatDate(`${day}T00:00:00Z`, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+          {isToday && <Badge tone="brand" className="ml-2">Today</Badge>}
+        </p>
+        {!isToday && (
+          <Button variant="ghost" size="sm" onClick={() => setDay(today)} className="ml-auto">
+            Jump to today
+          </Button>
+        )}
+      </Card>
 
-        {/* --- Dynamic Attendance Table --- */}
-        <div className="bg-white rounded-lg shadow-md overflow-x-auto">
-          <table className="min-w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Employee
-                </th>
-                <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Date
-                </th>
-                <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Check-in
-                </th>
-                <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Check-out
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {isLoading ? (
-                <tr>
-                  <td colSpan="5" className="text-center py-4">
-                    Loading attendance records...
-                  </td>
-                </tr>
-              ) : error ? (
-                <tr>
-                  <td colSpan="5" className="text-center py-4 text-red-500">
-                    {error}
-                  </td>
-                </tr>
-              ) : records.length === 0 ? (
-                <tr>
-                  <td colSpan="5" className="text-center py-4 text-gray-500">
-                    No attendance records found.
-                  </td>
-                </tr>
-              ) : (
-                records.map((record) => (
-                  <tr key={record._id}>
-                    <td className="py-4 px-6 whitespace-nowrap">
-                      {record.employee ? (
-                        <>
-                          <div className="font-medium text-gray-900">
-                            {record.employee.firstName}{" "}
-                            {record.employee.lastName}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            {record.employee.jobTitle}
-                          </div>
-                        </>
-                      ) : (
-                        <div className="text-sm text-red-500">
-                          Employee not found
-                        </div>
-                      )}
-                    </td>
-                    <td className="py-4 px-6 whitespace-nowrap text-sm text-gray-500">
-                      {formatDate(record.date)}
-                    </td>
-                    <td className="py-4 px-6 whitespace-nowrap">
-                      {getStatusChip(record.status)}
-                    </td>
-                    <td className="py-4 px-6 whitespace-nowrap text-sm text-gray-500">
-                      {formatTime(record.checkIn)}
-                    </td>
-                    <td className="py-4 px-6 whitespace-nowrap text-sm text-gray-500">
-                      {formatTime(record.checkOut)}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+      <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard label="Present" value={loading ? "–" : counts.Present} icon={UserCheck} tone="green" />
+        <StatCard label="Absent" value={loading ? "–" : counts.Absent} icon={UserX} tone="red" />
+        <StatCard label="On leave" value={loading ? "–" : counts.Leave} icon={Plane} tone="amber" />
+        <StatCard label="Not marked" value={loading ? "–" : counts.unmarked} hint={loading ? null : `of ${rows.length} employees`} icon={CircleDashed} tone="slate" />
       </div>
-    </>
+
+      <Card>
+        <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input type="search" placeholder="Search by name, ID or title" aria-label="Search employees" value={query} onChange={(e) => setQuery(e.target.value)} className="pl-9" />
+          </div>
+          <Select aria-label="Filter by department" value={dept} onChange={(e) => setDept(e.target.value)} className="sm:w-56">
+            <option value="">All departments</option>
+            {departments.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </Select>
+        </div>
+
+        {loading ? (
+          <TableSkeleton rows={6} cols={5} />
+        ) : error ? (
+          <ErrorState message={error} onRetry={retry} />
+        ) : visible.length === 0 ? (
+          <EmptyState
+            icon={CalendarCheck}
+            title={rows.length ? "No matching employees" : "No employees yet"}
+            description={rows.length ? "Try a different search or department." : "Add employees to start tracking attendance."}
+          />
+        ) : (
+          <>
+            {/* Desktop table */}
+            <div className="hidden overflow-x-auto md:block">
+              <table className="min-w-full divide-y divide-slate-100">
+                <thead className="bg-slate-50/60">
+                  <tr>
+                    <th className="table-th">Employee</th>
+                    <th className="table-th">Department</th>
+                    <th className="table-th">Status</th>
+                    <th className="table-th">Check in</th>
+                    <th className="table-th">Check out</th>
+                    {canMark && <th className="table-th text-right">Mark</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {visible.map(({ employee: e, record }) => (
+                    <tr key={e._id} className="hover:bg-slate-50/60">
+                      <td className="table-td">
+                        <div className="flex items-center gap-3">
+                          <Avatar name={fullName(e)} size="sm" />
+                          <div className="min-w-0">
+                            <p className="truncate font-medium text-slate-900">{fullName(e)}</p>
+                            <p className="truncate text-xs text-slate-500">{e.employeeId} · {e.jobTitle}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="table-td">{e.department}</td>
+                      <td className="table-td">{record ? <StatusBadge status={record.status} /> : <Badge>Not marked</Badge>}</td>
+                      <td className="table-td tabular-nums">{formatTime(record?.checkIn)}</td>
+                      <td className="table-td tabular-nums">{formatTime(record?.checkOut)}</td>
+                      {canMark && (
+                        <td className="table-td text-right">
+                          <StatusSegmented value={record?.status} disabled={saving[e._id]} onChange={(s) => mark(e, s)} label={`Attendance status for ${fullName(e)}`} />
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile cards */}
+            <ul className="divide-y divide-slate-100 md:hidden">
+              {visible.map(({ employee: e, record }) => (
+                <li key={e._id} className="space-y-3 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <Avatar name={fullName(e)} size="sm" />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-slate-900">{fullName(e)}</p>
+                        <p className="truncate text-xs text-slate-500">{e.department} · {e.employeeId}</p>
+                      </div>
+                    </div>
+                    {record ? <StatusBadge status={record.status} /> : <Badge>Not marked</Badge>}
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                    <span className="tabular-nums">
+                      In {formatTime(record?.checkIn)} · Out {formatTime(record?.checkOut)}
+                    </span>
+                    {canMark && <StatusSegmented value={record?.status} disabled={saving[e._id]} onChange={(s) => mark(e, s)} label={`Attendance status for ${fullName(e)}`} />}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </Card>
+
+      <ConfirmDialog
+        open={bulkOpen}
+        onClose={() => !bulkBusy && setBulkOpen(false)}
+        onConfirm={markAllPresent}
+        loading={bulkBusy}
+        tone="primary"
+        title="Mark everyone unmarked as present?"
+        message={`${unmarked.length} employee${unmarked.length === 1 ? "" : "s"} without a record on ${formatDate(`${day}T00:00:00Z`)} will be marked present. You can change individual rows afterwards.`}
+        confirmLabel={`Mark ${unmarked.length} present`}
+      />
+    </div>
   );
 };
 

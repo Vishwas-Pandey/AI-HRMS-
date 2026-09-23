@@ -1,0 +1,25 @@
+# Render Blueprint for the API. In Render: New > Blueprint > pick this repo.
+services:
+  - type: web
+    name: ai-hrms-api
+    runtime: node
+    rootDir: backend
+    buildCommand: npm ci --omit=dev
+    startCommand: node server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: GOOGLE_AI_API_KEY
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: COMPANY_TIMEZONE
+        value: Asia/Kolkata
+      # true = public demo: wipes and reseeds the database daily. Use a dedicated demo database.
+      - key: DEMO_MODE
+        value: "false"

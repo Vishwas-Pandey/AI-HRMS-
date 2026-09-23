@@ -28,6 +28,9 @@ const payrollSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    paidAt: {
+      type: Date,
+    },
     status: {
       type: String,
       required: true,
@@ -40,12 +43,9 @@ const payrollSchema = new mongoose.Schema(
   }
 );
 
-// Pre-calculate netSalary before saving
-payrollSchema.pre("save", function (next) {
-  if (this.isModified("grossSalary") || this.isModified("deductions")) {
-    this.netSalary = this.grossSalary - this.deductions;
-  }
-  next();
+// netSalary is required, so it must be computed before validation runs.
+payrollSchema.pre("validate", function () {
+  this.netSalary = (this.grossSalary || 0) - (this.deductions || 0);
 });
 
 const Payroll = mongoose.model("Payroll", payrollSchema);

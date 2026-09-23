@@ -1,3 +1,4 @@
+const { geminiUrl, requireGeminiKey } = require("../utils/gemini");
 const Performance = require("../models/Performance");
 const asyncHandler = require("express-async-handler");
 
@@ -29,14 +30,15 @@ exports.getAIInsights = asyncHandler(async (req, res) => {
   Data:
   ${performanceData}`;
 
-  const apiKey = process.env.GOOGLE_AI_API_KEY;
-  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+  const apiKey = requireGeminiKey(res);
+  const apiUrl = geminiUrl();
 
   try {
     const response = await fetch(apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
       },
       body: JSON.stringify({
         contents: [{ parts: [{ text: userQuery }] }],
@@ -102,14 +104,15 @@ exports.screenResume = asyncHandler(async (req, res) => {
     2.  A 2-3 sentence "Summary" of the candidate's qualifications.
     3.  A list of "Missing Key Skills".`;
 
-  const apiKey = process.env.GOOGLE_AI_API_KEY;
-  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+  const apiKey = requireGeminiKey(res);
+  const apiUrl = geminiUrl();
 
   try {
     const response = await fetch(apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
       },
       body: JSON.stringify({
         contents: [
@@ -192,36 +195,19 @@ exports.getSentimentAnalysis = asyncHandler(async (req, res) => {
   `;
 
   // 4. Call the AI API (using your fetch method)
-  const apiKey = process.env.GOOGLE_AI_API_KEY;
-  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+  const apiKey = requireGeminiKey(res);
+  const apiUrl = geminiUrl();
 
   try {
     const response = await fetch(apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
       },
       body: JSON.stringify({
         contents: [{ parts: [{ text: userQuery }] }],
-        // Adding safetySetting to encourage JSON output
-        safetySettings: [
-          {
-            category: "HARM_CATEGORY_HARASSMENT",
-            threshold: "BLOCK_NONE",
-          },
-          {
-            category: "HARM_CATEGORY_HATE_SPEECH",
-            threshold: "BLOCK_NONE",
-          },
-          {
-            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-            threshold: "BLOCK_NONE",
-          },
-          {
-            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-            threshold: "BLOCK_NONE",
-          },
-        ],
+        // Adding safetySetting to encourage JSON output,
         systemInstruction: {
           parts: [{ text: systemPrompt }],
         },
@@ -314,30 +300,18 @@ exports.getDashboardInsights = asyncHandler(async (req, res) => {
   `;
 
   // 4. Call the AI API
-  const apiKey = process.env.GOOGLE_AI_API_KEY;
-  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+  const apiKey = requireGeminiKey(res);
+  const apiUrl = geminiUrl();
 
   try {
     const response = await fetch(apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
       },
       body: JSON.stringify({
         contents: [{ parts: [{ text: userQuery }] }],
-        safetySettings: [
-          // Disabling safety blocks
-          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-          {
-            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-            threshold: "BLOCK_NONE",
-          },
-          {
-            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-            threshold: "BLOCK_NONE",
-          },
-        ],
         systemInstruction: {
           parts: [{ text: systemPrompt }],
         },
@@ -392,17 +366,22 @@ exports.handleChatbot = asyncHandler(async (req, res) => {
 
   // 2. Format the chat history for the AI
   // The Gemini API expects history as: [{ role: "user", parts: [{ text: "..." }] }, { role: "model", parts: [{ text: "..." }] }]
-  const aiHistory = history || [];
+  // Only accept plain user/model text turns, and keep the last 20.
+  const aiHistory = (Array.isArray(history) ? history : [])
+    .filter((h) => ["user", "model"].includes(h?.role) && typeof h?.parts?.[0]?.text === "string")
+    .slice(-20)
+    .map((h) => ({ role: h.role, parts: [{ text: h.parts[0].text.slice(0, 4000) }] }));
 
   // 3. Call the AI API
-  const apiKey = process.env.GOOGLE_AI_API_KEY;
-  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+  const apiKey = requireGeminiKey(res);
+  const apiUrl = geminiUrl();
 
   try {
     const response = await fetch(apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
       },
       body: JSON.stringify({
         // Add the new user message to the end of the history
@@ -450,14 +429,15 @@ exports.generateTemplate = asyncHandler(async (req, res) => {
   `;
 
   // 2. Call the AI API
-  const apiKey = process.env.GOOGLE_AI_API_KEY;
-  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+  const apiKey = requireGeminiKey(res);
+  const apiUrl = geminiUrl();
 
   try {
     const response = await fetch(apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
       },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }], // Just send the user's prompt
@@ -522,15 +502,15 @@ exports.analyzeVoiceInterview = asyncHandler(async (req, res) => {
   `;
 
   // 3. Call the AI API (using your fetch method)
-  const apiKey = process.env.GOOGLE_AI_API_KEY;
-  // Note: Using a model that is good with audio
-  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  const apiKey = requireGeminiKey(res);
+  const apiUrl = geminiUrl(); // Gemini 2.5 Flash accepts audio input
 
   try {
     const response = await fetch(apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
       },
       body: JSON.stringify({
         contents: [

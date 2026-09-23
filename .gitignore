@@ -21,3 +21,4 @@ frontend-app/node_modules
 frontend-app/dist
 frontend-app/.env*
 frontend-app/coverage
+!frontend/.env.example

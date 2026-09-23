@@ -1,21 +1,15 @@
 const express = require("express");
-const router = express.Router();
-const {
-  getAllPerformanceReviews,
-  createPerformanceReview,
-  getMyPerformanceReviews, // <-- 1. Import new function
-} = require("../controllers/performanceController");
+const c = require("../controllers/performanceController");
 const { protect, restrictTo } = require("../middleware/authMiddleware");
 
+const router = express.Router();
 router.use(protect);
 
-// Admin/HR routes
+router.get("/my-reviews", c.getMyPerformanceReviews);
+
 router
   .route("/")
-  .get(restrictTo("admin", "hr"), getAllPerformanceReviews)
-  .post(restrictTo("admin", "hr"), createPerformanceReview);
-
-// --- 2. ADD NEW ROUTE for individual employees ---
-router.route("/my-reviews").get(getMyPerformanceReviews);
+  .get(restrictTo("admin", "hr", "manager"), c.getAllPerformanceReviews)
+  .post(restrictTo("admin", "hr", "manager"), c.createPerformanceReview);
 
 module.exports = router;

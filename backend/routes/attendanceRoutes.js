@@ -1,19 +1,17 @@
 const express = require("express");
-const router = express.Router();
-const {
-  getAllAttendance,
-  markCheckIn,
-} = require("../controllers/attendanceController");
+const c = require("../controllers/attendanceController");
 const { protect, restrictTo } = require("../middleware/authMiddleware");
 
-// Protect all routes
+const router = express.Router();
 router.use(protect);
 
-// Get all attendance (HR, Admin)
-// Mark attendance (Admin, HR)
+router.get("/my", c.getMyAttendance);
+router.post("/check-in", c.checkIn);
+router.post("/check-out", c.checkOut);
+
 router
   .route("/")
-  .get(restrictTo("admin", "hr"), getAllAttendance)
-  .post(restrictTo("admin", "hr"), markCheckIn);
+  .get(restrictTo("admin", "hr", "manager"), c.getAllAttendance)
+  .post(restrictTo("admin", "hr"), c.markAttendance);
 
 module.exports = router;

@@ -7,7 +7,7 @@ const bcrypt = require("bcryptjs");
 // @route   POST /api/auth/register
 // @access  Public
 exports.registerUser = asyncHandler(async (req, res) => {
-  const { name, email, password, role, enrollmentNumber } = req.body;
+  const { name, email, password, enrollmentNumber } = req.body;
 
   // 1. Check if user already exists
   const userExists = await User.findOne({ email });
@@ -17,12 +17,15 @@ exports.registerUser = asyncHandler(async (req, res) => {
     throw new Error("User already exists");
   }
 
-  // 2. Create the user
+  // 2. Create the user. The role is never taken from the request body:
+  // the very first account bootstraps the system as admin, everyone else
+  // registers as an employee (admins create HR/manager accounts).
+  const isFirstUser = (await User.estimatedDocumentCount()) === 0;
   const user = await User.create({
     name,
     email,
     password, // Hashing is handled by the 'pre-save' hook in User.js
-    role: role || "employee",
+    role: isFirstUser ? "admin" : "employee",
     enrollmentNumber,
   });
 

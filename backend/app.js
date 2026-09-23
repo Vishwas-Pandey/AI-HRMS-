@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const mongoose = require("mongoose");
 const { notFound, errorHandler } = require("./middleware/errorMiddleware");
 
 const app = express();
@@ -26,7 +27,15 @@ app.use(
 app.use(express.json({ limit: "1mb" }));
 
 app.get("/", (req, res) => res.send("AI-HRMS API is running"));
-app.get("/api/health", (req, res) => res.json({ status: "ok" }));
+app.get("/api/health", (req, res) =>
+  res.json({ status: "ok", database: mongoose.connection.readyState === 1 ? "connected" : "disconnected" })
+);
+
+// Fail fast with a clear message instead of letting requests hang on the DB.
+app.use("/api", (req, res, next) => {
+  if (mongoose.connection.readyState === 1) return next();
+  res.status(503).json({ message: "The database is unavailable right now. Please try again in a minute." });
+});
 
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/users", require("./routes/userRoutes"));

@@ -29,6 +29,7 @@ exports.createPerformanceReview = asyncHandler(async (req, res) => {
     rating,
     comments,
     reviewDate,
+    reviewer: req.user._id,
   });
 
   // Populate the new review before sending it back

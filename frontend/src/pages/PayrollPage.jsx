@@ -1,233 +1,253 @@
-import React, { useState, useEffect } from "react";
-import { useUser } from "../context/UserContext";
-import axiosInstance from "../api/axiosInstance";
+import { useMemo, useState } from "react";
+import { Banknote, CheckCircle2, Clock, Plus, Search, Wallet } from "lucide-react";
+import {
+  Avatar,
+  Button,
+  Card,
+  ConfirmDialog,
+  EmptyState,
+  ErrorState,
+  Input,
+  PageHeader,
+  Select,
+  StatCard,
+  StatusBadge,
+  TableSkeleton,
+  useToast,
+} from "../components/ui";
+import { useAuth } from "../context/AuthContext";
+import api, { errorMessage } from "../lib/api";
+import { formatDate, formatMoney, formatPeriod, fullName } from "../lib/format";
+import { can } from "../lib/roles";
+import { useFetch } from "../lib/useFetch";
+import { NewPayrollModal } from "./payroll/NewPayrollModal";
 
-// --- 1. IMPORT THE NEW MODAL ---
-import AddPayrollModal from "../components/AddPayrollModal.jsx";
-
-// --- Icons ---
-const IconPlus = (props) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    {...props}
-  >
-    <line x1="12" y1="5" x2="12" y2="19" />
-    <line x1="5" y1="12" x2="19" y2="12" />
-  </svg>
-);
-const IconCheckCircle = (props) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    {...props}
-  >
-    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-    <polyline points="22 4 12 14.01 9 11.01" />
-  </svg>
-);
-const IconClock = (props) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    {...props}
-  >
-    <circle cx="12" cy="12" r="10" />
-    <polyline points="12 6 12 12 16 14" />
-  </svg>
-);
-// --- End Icons ---
+const monthKey = (d) => (d ? new Date(d).toISOString().slice(0, 7) : "");
+const monthLabel = (key) => formatDate(`${key}-01T00:00:00Z`, { month: "long", year: "numeric" });
+const thisMonth = () => {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`;
+};
 
 const PayrollPage = () => {
-  const { user } = useUser();
-  const [payrolls, setPayrolls] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { user } = useAuth();
+  const toast = useToast();
+  const canManage = can(user, "payroll.manage");
 
-  // --- 2. ADD STATE TO CONTROL THE MODAL ---
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const payroll = useFetch("/payroll");
+  const employees = useFetch(canManage ? "/employees" : null, { enabled: canManage });
 
-  // Helper to format date strings
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("");
+  const [month, setMonth] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [paying, setPaying] = useState(null);
+  const [payBusy, setPayBusy] = useState(false);
+
+  const records = useMemo(() => payroll.data || [], [payroll.data]);
+  const current = thisMonth();
+
+  const stats = useMemo(() => {
+    const monthRows = records.filter((r) => monthKey(r.periodStartDate) === current);
+    const pending = records.filter((r) => r.status === "Pending");
+    return {
+      monthNet: monthRows.reduce((s, r) => s + (r.netSalary || 0), 0),
+      monthCount: monthRows.length,
+      pendingCount: pending.length,
+      pendingAmount: pending.reduce((s, r) => s + (r.netSalary || 0), 0),
+      paidCount: records.filter((r) => r.status === "Paid").length,
+    };
+  }, [records, current]);
+
+  const months = useMemo(() => [...new Set(records.map((r) => monthKey(r.periodStartDate)).filter(Boolean))].sort().reverse(), [records]);
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return records.filter((r) => {
+      if (status && r.status !== status) return false;
+      if (month && monthKey(r.periodStartDate) !== month) return false;
+      if (!q) return true;
+      return [fullName(r.employee), r.employee?.employeeId, r.employee?.department].some((v) => v?.toLowerCase().includes(q));
     });
-  };
+  }, [records, query, status, month]);
 
-  // Helper to format currency
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(amount);
-  };
-
-  const fetchPayrolls = async () => {
+  const confirmPay = async () => {
+    setPayBusy(true);
     try {
-      setIsLoading(true);
-      const response = await axiosInstance.get("/payroll");
-      setPayrolls(response.data);
+      const res = await api.patch(`/payroll/${paying._id}/pay`);
+      payroll.setData((list) => list.map((r) => (r._id === res.data._id ? res.data : r)));
+      toast.success(`Marked ${fullName(res.data.employee)}'s payroll as paid`);
+      setPaying(null);
     } catch (err) {
-      setError(err.message || "Failed to fetch payroll records");
+      toast.error(errorMessage(err));
     } finally {
-      setIsLoading(false);
+      setPayBusy(false);
     }
   };
 
-  useEffect(() => {
-    fetchPayrolls();
-  }, []);
+  const onCreated = (rec) => payroll.setData((list) => [rec, ...(list || [])]);
 
-  // --- 3. FUNCTION TO UPDATE LIST AFTER ADDING ---
-  const handleRecordAdded = (newRecord) => {
-    // Re-fetch all payrolls to get the populated data
-    fetchPayrolls();
-  };
+  const statusCell = (r) => (
+    <div className="flex flex-col items-start gap-0.5">
+      <StatusBadge status={r.status} />
+      {r.status === "Paid" && r.paidAt && <span className="text-xs text-slate-500">on {formatDate(r.paidAt)}</span>}
+    </div>
+  );
+
+  const payAction = (r) =>
+    canManage && r.status === "Pending" ? (
+      <Button variant="secondary" size="sm" icon={CheckCircle2} onClick={() => setPaying(r)}>
+        Mark paid
+      </Button>
+    ) : null;
 
   return (
-    <>
-      {/* --- 4. RENDER THE MODAL --- */}
-      <AddPayrollModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onRecordAdded={handleRecordAdded}
+    <div>
+      <PageHeader
+        title="Payroll"
+        description={canManage ? "Create pay records and track what has been paid out." : "Pay records across the company (view only)."}
+        actions={
+          canManage && (
+            <Button icon={Plus} onClick={() => setCreating(true)} disabled={employees.loading}>
+              New payroll record
+            </Button>
+          )
+        }
       />
 
-      <div className="p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-800">Payroll</h1>
-
-          {/* --- 5. CONNECT THE BUTTON --- */}
-          {user.role === "admin" && (
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="flex items-center bg-indigo-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-indigo-700 transition-colors"
-            >
-              <IconPlus className="w-5 h-5 mr-2" />
-              Create Payroll Record
-            </button>
-          )}
-        </div>
-
-        {/* --- Dynamic Payroll Table --- */}
-        <div className="bg-white rounded-lg shadow-md overflow-x-auto">
-          <table className="min-w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Employee
-                </th>
-                <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Pay Period
-                </th>
-                <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Gross Salary
-                </th>
-                <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Deductions
-                </th>
-                <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Net Salary
-                </th>
-                <th className="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {isLoading ? (
-                <tr>
-                  <td colSpan="6" className="text-center py-4">
-                    Loading payroll records...
-                  </td>
-                </tr>
-              ) : error ? (
-                <tr>
-                  <td colSpan="6" className="text-center py-4 text-red-500">
-                    {error}
-                  </td>
-                </tr>
-              ) : payrolls.length === 0 ? (
-                <tr>
-                  <td colSpan="6" className="text-center py-4 text-gray-500">
-                    No payroll records found.
-                  </td>
-                </tr>
-              ) : (
-                payrolls.map((record) => (
-                  <tr key={record._id}>
-                    <td className="py-4 px-6 whitespace-nowrap">
-                      {record.employee ? (
-                        <>
-                          <div className="font-medium text-gray-900">
-                            {record.employee.firstName}{" "}
-                            {record.employee.lastName}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            {record.employee.jobTitle}
-                          </div>
-                        </>
-                      ) : (
-                        <div className="text-sm text-red-500">
-                          Employee not found
-                        </div>
-                      )}
-                    </td>
-                    <td className="py-4 px-6 whitespace-nowrap text-sm text-gray-500">
-                      {formatDate(record.periodStartDate)} -{" "}
-                      {formatDate(record.periodEndDate)}
-                    </td>
-                    <td className="py-4 px-6 whitespace-nowrap text-sm text-green-600">
-                      {formatCurrency(record.grossSalary)}
-                    </td>
-                    <td className="py-4 px-6 whitespace-nowrap text-sm text-red-600">
-                      {formatCurrency(record.deductions)}
-                    </td>
-                    <td className="py-4 px-6 whitespace-nowrap text-sm font-bold text-gray-900">
-                      {formatCurrency(record.netSalary)}
-                    </td>
-                    <td className="py-4 px-6 whitespace-nowrap">
-                      {record.status === "Paid" ? (
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                          <IconCheckCircle className="w-4 h-4 mr-1" /> Paid
-                        </span>
-                      ) : (
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                          <IconClock className="w-4 h-4 mr-1" /> Pending
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <StatCard label="Net payroll this month" value={payroll.loading ? "–" : formatMoney(stats.monthNet)} hint={payroll.loading ? null : `${stats.monthCount} record${stats.monthCount === 1 ? "" : "s"} for ${monthLabel(current)}`} icon={Wallet} tone="brand" />
+        <StatCard label="Pending" value={payroll.loading ? "–" : stats.pendingCount} hint={payroll.loading ? null : `${formatMoney(stats.pendingAmount)} to pay out`} icon={Clock} tone="amber" />
+        <StatCard label="Paid" value={payroll.loading ? "–" : stats.paidCount} hint="All-time paid records" icon={Banknote} tone="green" />
       </div>
-    </>
+
+      <Card>
+        <div className="flex flex-col gap-3 border-b border-slate-100 p-4 md:flex-row">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input type="search" placeholder="Search by employee, ID or department" aria-label="Search payroll" value={query} onChange={(e) => setQuery(e.target.value)} className="pl-9" />
+          </div>
+          <div className="grid grid-cols-2 gap-3 md:flex">
+            <Select aria-label="Filter by status" value={status} onChange={(e) => setStatus(e.target.value)} className="md:w-40">
+              <option value="">All statuses</option>
+              <option value="Pending">Pending</option>
+              <option value="Paid">Paid</option>
+            </Select>
+            <Select aria-label="Filter by month" value={month} onChange={(e) => setMonth(e.target.value)} className="md:w-48">
+              <option value="">All months</option>
+              {months.map((m) => (
+                <option key={m} value={m}>
+                  {monthLabel(m)}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </div>
+
+        {payroll.loading ? (
+          <TableSkeleton rows={6} cols={6} />
+        ) : payroll.error ? (
+          <ErrorState message={payroll.error} onRetry={payroll.reload} />
+        ) : visible.length === 0 ? (
+          <EmptyState
+            icon={Wallet}
+            title={records.length ? "No records match these filters" : "No payroll records yet"}
+            description={records.length ? "Try clearing the search, status or month filter." : canManage ? "Create the first pay record to get started." : "Records will appear here once an admin creates them."}
+            action={
+              !records.length && canManage ? (
+                <Button icon={Plus} onClick={() => setCreating(true)}>
+                  New payroll record
+                </Button>
+              ) : null
+            }
+          />
+        ) : (
+          <>
+            <div className="hidden overflow-x-auto md:block">
+              <table className="min-w-full divide-y divide-slate-100">
+                <thead className="bg-slate-50/60">
+                  <tr>
+                    <th className="table-th">Employee</th>
+                    <th className="table-th">Period</th>
+                    <th className="table-th text-right">Gross</th>
+                    <th className="table-th text-right">Deductions</th>
+                    <th className="table-th text-right">Net</th>
+                    <th className="table-th">Status</th>
+                    {canManage && <th className="table-th text-right"><span className="sr-only">Actions</span></th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {visible.map((r) => (
+                    <tr key={r._id} className="hover:bg-slate-50/60">
+                      <td className="table-td">
+                        <div className="flex items-center gap-3">
+                          <Avatar name={fullName(r.employee)} size="sm" />
+                          <div className="min-w-0">
+                            <p className="truncate font-medium text-slate-900">{fullName(r.employee)}</p>
+                            <p className="truncate text-xs text-slate-500">{r.employee?.employeeId} · {r.employee?.department}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="table-td whitespace-nowrap">{formatPeriod(r.periodStartDate, r.periodEndDate)}</td>
+                      <td className="table-td text-right tabular-nums">{formatMoney(r.grossSalary)}</td>
+                      <td className="table-td text-right tabular-nums text-slate-500">−{formatMoney(r.deductions)}</td>
+                      <td className="table-td text-right font-semibold tabular-nums text-slate-900">{formatMoney(r.netSalary)}</td>
+                      <td className="table-td">{statusCell(r)}</td>
+                      {canManage && <td className="table-td text-right">{payAction(r)}</td>}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <ul className="divide-y divide-slate-100 md:hidden">
+              {visible.map((r) => (
+                <li key={r._id} className="space-y-3 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <Avatar name={fullName(r.employee)} size="sm" />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-slate-900">{fullName(r.employee)}</p>
+                        <p className="truncate text-xs text-slate-500">{formatPeriod(r.periodStartDate, r.periodEndDate)}</p>
+                      </div>
+                    </div>
+                    {statusCell(r)}
+                  </div>
+                  <dl className="grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <dt className="text-slate-500">Gross</dt>
+                      <dd className="font-medium tabular-nums text-slate-700">{formatMoney(r.grossSalary)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-slate-500">Deductions</dt>
+                      <dd className="font-medium tabular-nums text-slate-700">{formatMoney(r.deductions)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-slate-500">Net</dt>
+                      <dd className="font-semibold tabular-nums text-slate-900">{formatMoney(r.netSalary)}</dd>
+                    </div>
+                  </dl>
+                  {payAction(r)}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </Card>
+
+      {canManage && <NewPayrollModal open={creating} onClose={() => setCreating(false)} employees={employees.data || []} onCreated={onCreated} />}
+
+      <ConfirmDialog
+        open={Boolean(paying)}
+        onClose={() => !payBusy && setPaying(null)}
+        onConfirm={confirmPay}
+        loading={payBusy}
+        tone="primary"
+        title="Mark this payroll as paid?"
+        message={paying ? `${fullName(paying.employee)} · ${formatPeriod(paying.periodStartDate, paying.periodEndDate)} · net ${formatMoney(paying.netSalary)}. This records today as the paid date and can't be undone.` : ""}
+        confirmLabel="Mark paid"
+      />
+    </div>
   );
 };
 

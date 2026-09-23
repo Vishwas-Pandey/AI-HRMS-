@@ -43,6 +43,11 @@ const employeeSchema = new mongoose.Schema(
     salary: {
       type: Number,
       required: true,
+      min: 0,
+    },
+    phone: {
+      type: String,
+      trim: true,
     },
   },
   {

@@ -1,23 +1,17 @@
 const express = require("express");
-const router = express.Router();
-const {
-  getAllPayrolls,
-  createPayroll,
-  getMyPayrollRecords,
-} = require("../controllers/payrollController");
+const c = require("../controllers/payrollController");
 const { protect, restrictTo } = require("../middleware/authMiddleware");
 
-// Protect all routes
+const router = express.Router();
 router.use(protect);
 
-// Payslips for the logged-in employee
-router.get("/my-payslips", getMyPayrollRecords);
+router.get("/my-payslips", c.getMyPayrollRecords);
 
-// Get all payrolls (HR, Admin)
-// Create payroll (Admin only)
 router
   .route("/")
-  .get(restrictTo("admin", "hr"), getAllPayrolls)
-  .post(restrictTo("admin"), createPayroll);
+  .get(restrictTo("admin", "hr"), c.getAllPayrolls)
+  .post(restrictTo("admin"), c.createPayroll);
+
+router.patch("/:id/pay", restrictTo("admin"), c.markPaid);
 
 module.exports = router;

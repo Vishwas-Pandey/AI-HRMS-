@@ -1,10 +1,7 @@
-const User = require("../models/User");
 const asyncHandler = require("express-async-handler");
+const User = require("../models/User");
 
-// @desc    Get all users (Admin Only)
-// @route   GET /api/users
-// @access  Private/Admin
+// @route GET /api/users  (admin)
 exports.getUsers = asyncHandler(async (req, res) => {
-  const users = await User.find({});
-  res.json(users);
+  res.json(await User.find({}).select("name email role mustChangePassword createdAt").sort({ createdAt: 1 }));
 });

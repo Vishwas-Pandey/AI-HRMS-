@@ -1,5 +1,5 @@
 // Small wrapper around the Gemini REST API used by the AI controllers.
-const DEFAULT_MODEL = "gemini-2.5-flash";
+const DEFAULT_MODEL = "gemini-3.8-flash";
 
 const geminiUrl = () =>
   `https://generativelanguage.googleapis.com/v1beta/models/${process.env.GEMINI_MODEL || DEFAULT_MODEL}:generateContent`;

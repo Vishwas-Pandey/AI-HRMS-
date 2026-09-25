@@ -4,7 +4,7 @@ import axios from "axios";
 // production builds talk to the deployed one.
 export const API_BASE_URL =
   import.meta.env.VITE_API_URL ||
-  (import.meta.env.DEV ? "http://localhost:5055/api" : "https://hr-management-system-6a3b.onrender.com/api");
+  (import.meta.env.DEV ? "http://localhost:5055/api" : "https://ai-hrms-e0v1.onrender.com/api");
 
 const TOKEN_KEY = "hrms.token";
 

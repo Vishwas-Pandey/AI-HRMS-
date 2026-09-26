@@ -475,11 +475,6 @@ exports.analyzeVoiceInterview = asyncHandler(async (req, res) => {
     throw new Error("No audio file uploaded");
   }
 
-  if (!jobDescription) {
-    res.status(400);
-    throw new Error("No job description provided for context");
-  }
-
   // 1. Convert the audio file buffer to base64
   const base64Audio = req.file.buffer.toString("base64");
   const mimeType = req.file.mimetype; // e.g., "audio/webm", "audio/mp3"
@@ -488,12 +483,11 @@ exports.analyzeVoiceInterview = asyncHandler(async (req, res) => {
   const systemPrompt = `
     Act as a senior HR manager. You are analyzing a candidate's voice recording
     from a pre-screening interview. Transcribe their answers and then evaluate
-    them against the provided job description for clarity, relevance, and professionalism.
+    them for clarity, relevance, and professionalism${jobDescription ? ", against the provided job description" : ""}.
   `;
   const userQuery = `
-    Job Description for context:
-    ${jobDescription}
-    
+    ${jobDescription ? `Job Description for context:\n    ${jobDescription}` : "No job description was provided; evaluate the answers on their general merits."}
+
     Attached is the candidate's audio response. Please provide:
     1.  A "Full Transcription" of their answers.
     2.  A "Sentiment Analysis" (e.g., Confident, Nervous, Positive).

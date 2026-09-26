@@ -17,7 +17,7 @@ import {
 } from "../components/ui";
 import { useAuth } from "../context/AuthContext";
 import api, { errorMessage } from "../lib/api";
-import { formatDate, formatMoney, formatPeriod, fullName } from "../lib/format";
+import { formatDate, formatMoney, formatPeriod, formatTimestampDate, fullName } from "../lib/format";
 import { can } from "../lib/roles";
 import { useFetch } from "../lib/useFetch";
 import { NewPayrollModal } from "./payroll/NewPayrollModal";
@@ -90,7 +90,7 @@ const PayrollPage = () => {
   const statusCell = (r) => (
     <div className="flex flex-col items-start gap-0.5">
       <StatusBadge status={r.status} />
-      {r.status === "Paid" && r.paidAt && <span className="text-xs text-slate-500">on {formatDate(r.paidAt)}</span>}
+      {r.status === "Paid" && r.paidAt && <span className="text-xs text-slate-500">on {formatTimestampDate(r.paidAt)}</span>}
     </div>
   );
 
@@ -244,7 +244,7 @@ const PayrollPage = () => {
         loading={payBusy}
         tone="primary"
         title="Mark this payroll as paid?"
-        message={paying ? `${fullName(paying.employee)} · ${formatPeriod(paying.periodStartDate, paying.periodEndDate)} · net ${formatMoney(paying.netSalary)}. This records today as the paid date and can't be undone.` : ""}
+        message={paying ? `${fullName(paying.employee)} · ${formatPeriod(paying.periodStartDate, paying.periodEndDate)} · net ${formatMoney(paying.netSalary)}. This records today's date as the paid date and can't be undone.` : ""}
         confirmLabel="Mark paid"
       />
     </div>

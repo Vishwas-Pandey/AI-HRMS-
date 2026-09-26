@@ -5,6 +5,12 @@ export const formatMoney = (n) => (n === undefined || n === null || Number.isNaN
 export const formatDate = (d, opts = { day: "numeric", month: "short", year: "numeric" }) =>
   d ? new Date(d).toLocaleDateString("en-IN", { timeZone: "UTC", ...opts }) : "—";
 
+// For real timestamps (e.g. paidAt) rather than pure calendar dates: render in the
+// viewer's local timezone instead of forcing UTC, so the date shown matches the day
+// the action actually happened for them.
+export const formatTimestampDate = (d, opts = { day: "numeric", month: "short", year: "numeric" }) =>
+  d ? new Date(d).toLocaleDateString("en-IN", opts) : "—";
+
 export const formatTime = (d) =>
   d ? new Date(d).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "—";
 

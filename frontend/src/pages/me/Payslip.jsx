@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { formatDate, formatMoney, formatPeriod } from "../../lib/format";
+import { formatDate, formatMoney, formatPeriod, formatTimestampDate } from "../../lib/format";
 
 const ONES = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
 const TENS = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
@@ -47,7 +47,7 @@ export const Payslip = ({ slip, employee }) => (
         <p className="text-xs uppercase tracking-wide text-slate-500">Status</p>
         <p className={`font-semibold ${slip.status === "Paid" ? "text-emerald-700" : "text-amber-700"}`}>
           {slip.status}
-          {slip.status === "Paid" && slip.paidAt ? ` · ${formatDate(slip.paidAt)}` : ""}
+          {slip.status === "Paid" && slip.paidAt ? ` · ${formatTimestampDate(slip.paidAt)}` : ""}
         </p>
       </div>
     </header>

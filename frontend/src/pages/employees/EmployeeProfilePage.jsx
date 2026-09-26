@@ -20,7 +20,7 @@ import { useAuth } from "../../context/AuthContext";
 import { can } from "../../lib/roles";
 import { useFetch } from "../../lib/useFetch";
 import api, { errorMessage } from "../../lib/api";
-import { formatDate, formatMoney, formatPeriod, formatTime, fullName } from "../../lib/format";
+import { formatDate, formatMoney, formatPeriod, formatTime, formatTimestampDate, fullName } from "../../lib/format";
 import {
   Avatar,
   Badge,
@@ -178,7 +178,7 @@ const PayrollTab = ({ id }) => {
                 <td className="table-td whitespace-nowrap text-right font-medium tabular-nums text-slate-900">{formatMoney(p.netSalary)}</td>
                 <td className="table-td whitespace-nowrap">
                   <StatusBadge status={p.status} />
-                  {p.paidAt && <span className="ml-2 text-xs text-slate-500">{formatDate(p.paidAt)}</span>}
+                  {p.paidAt && <span className="ml-2 text-xs text-slate-500">{formatTimestampDate(p.paidAt)}</span>}
                 </td>
               </tr>
             ))}

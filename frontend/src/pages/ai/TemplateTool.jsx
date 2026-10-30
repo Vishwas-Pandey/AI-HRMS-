@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Copy, FileText } from "lucide-react";
 import api, { errorMessage } from "../../lib/api";
-import { Alert, Button, Field, Markdown, Textarea, useToast } from "../../components/ui";
+import { Alert, Button, Field, Markdown, Textarea, useToast, BusyNotice } from "../../components/ui";
 
 const PRESETS = ["Offer letter for a senior backend engineer", "Warning letter for repeated late arrivals", "Work-from-home policy for a 50-person startup", "Experience certificate"];
 
@@ -39,7 +39,8 @@ export const TemplateTool = () => {
             <button key={p} onClick={() => run(p)} className="rounded-full border border-slate-200 px-3 py-1.5 text-xs text-slate-600 hover:border-brand-300 hover:bg-brand-50">{p}</button>
           ))}
         </div>
-        {error && <Alert>{error}</Alert>}
+        <BusyNotice show={loading}>Writing your draft. This can take a few seconds.</BusyNotice>
+      {error && <Alert>{error}</Alert>}
         <Button icon={FileText} onClick={() => run()} loading={loading}>Generate</Button>
       </div>
       <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-5">

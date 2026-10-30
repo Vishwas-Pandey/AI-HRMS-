@@ -3,7 +3,7 @@ import { Doughnut } from "react-chartjs-2";
 import { Gauge } from "lucide-react";
 import api, { errorMessage } from "../../lib/api";
 import "../../lib/charts";
-import { Alert, Button, Markdown } from "../../components/ui";
+import { Alert, Button, Markdown, BusyNotice } from "../../components/ui";
 
 export const SentimentTool = () => {
   const [sentiment, setSentiment] = useState(null);
@@ -33,6 +33,7 @@ export const SentimentTool = () => {
         <p className="max-w-xl text-sm text-slate-500">Reads every performance review comment and summarizes the overall tone, top performer and who may need support.</p>
         <Button icon={Gauge} onClick={run} loading={loading}>{sentiment ? "Run again" : "Analyze reviews"}</Button>
       </div>
+      <BusyNotice show={loading}>Reading every review. This can take up to 30 seconds.</BusyNotice>
       {error && <Alert>{error}</Alert>}
       {sentiment && (
         <div className="grid gap-6 lg:grid-cols-3">

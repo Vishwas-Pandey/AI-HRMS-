@@ -17,6 +17,12 @@ const upload = require("../middleware/uploadMiddleware");
 // Protect all AI routes
 router.use(protect);
 
+// Lets the UI check whether AI is switched on before it calls an AI endpoint,
+// instead of firing requests that are certain to fail with a 503.
+router.get("/status", (req, res) => {
+  res.json({ configured: Boolean(process.env.GOOGLE_AI_API_KEY) });
+});
+
 router
   .route("/insights")
   .get(restrictTo("admin", "manager", "hr"), getAIInsights);

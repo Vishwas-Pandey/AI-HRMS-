@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Mic, Square, AudioLines } from "lucide-react";
 import api, { errorMessage } from "../../lib/api";
-import { Alert, Button, Field, Markdown, Textarea } from "../../components/ui";
+import { Alert, Button, Field, Markdown, Textarea, BusyNotice } from "../../components/ui";
 import { FileDrop } from "./FileDrop";
 
 export const InterviewTool = () => {
@@ -80,7 +80,8 @@ export const InterviewTool = () => {
         <Field label="Job description" hint="Optional, but gives better analysis">
           {(p) => <Textarea {...p} rows={5} value={jd} onChange={(e) => setJd(e.target.value)} />}
         </Field>
-        {error && <Alert>{error}</Alert>}
+        <BusyNotice show={loading}>Analyzing the interview. Longer recordings can take up to 30 seconds.</BusyNotice>
+      {error && <Alert>{error}</Alert>}
         <Button icon={AudioLines} onClick={run} loading={loading} disabled={recording}>Analyze interview</Button>
       </div>
       <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-5">

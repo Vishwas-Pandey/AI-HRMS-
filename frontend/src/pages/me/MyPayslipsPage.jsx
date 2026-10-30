@@ -2,7 +2,7 @@ import { useState } from "react";
 import { FileText, Printer, Wallet } from "lucide-react";
 import { Button, Card, EmptyState, ErrorState, Modal, PageHeader, StatCard, StatusBadge, TableSkeleton } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
-import { formatDate, formatMoney, formatPeriod, formatTimestampDate } from "../../lib/format";
+import { formatMoney, formatPeriod, formatTimestampDate } from "../../lib/format";
 import { useFetch } from "../../lib/useFetch";
 import { Payslip, PrintablePayslip } from "./Payslip";
 

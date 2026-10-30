@@ -64,3 +64,12 @@ export const Alert = ({ tone = "red", children }) => {
     </div>
   );
 };
+
+// Shown while a slow request (AI, uploads) is running, so people know the app is working and not frozen.
+export const BusyNotice = ({ show, children = "Working on it. This can take up to 30 seconds." }) =>
+  show ? (
+    <div role="status" aria-live="polite" className="flex items-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2.5 text-sm text-brand-800">
+      <span aria-hidden="true" className="h-4 w-4 shrink-0 rounded-full border-2 border-brand-300 border-t-brand-700 animate-spin motion-reduce:animate-none" />
+      <span>{children}</span>
+    </div>
+  ) : null;

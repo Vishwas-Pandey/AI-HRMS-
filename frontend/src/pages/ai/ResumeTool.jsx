@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { FileSearch } from "lucide-react";
 import api, { errorMessage } from "../../lib/api";
-import { Alert, Button, Field, Markdown, Textarea } from "../../components/ui";
+import { Alert, Button, Field, Markdown, Textarea, BusyNotice } from "../../components/ui";
 import { FileDrop } from "./FileDrop";
 
 export const ResumeTool = () => {
@@ -37,7 +37,8 @@ export const ResumeTool = () => {
         <Field label="Job description" required>
           {(p) => <Textarea {...p} rows={8} value={jd} onChange={(e) => setJd(e.target.value)} placeholder="Paste the role's responsibilities and requirements…" />}
         </Field>
-        {error && <Alert>{error}</Alert>}
+        <BusyNotice show={loading}>Reading the resume and scoring it against the role. This can take up to 30 seconds.</BusyNotice>
+      {error && <Alert>{error}</Alert>}
         <Button icon={FileSearch} onClick={run} loading={loading}>Screen resume</Button>
       </div>
       <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-5">

@@ -18,10 +18,11 @@ export const Button = ({ variant = "primary", size = "md", loading = false, icon
   <button
     type="button"
     disabled={disabled || loading}
+    aria-busy={loading || undefined}
     className={`inline-flex items-center justify-center rounded-lg font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${VARIANTS[variant]} ${SIZES[size]} ${className}`}
     {...props}
   >
-    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : Icon ? <Icon className="h-4 w-4" /> : null}
+    {loading ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : Icon ? <Icon className="h-4 w-4" /> : null}
     {children}
   </button>
 );
